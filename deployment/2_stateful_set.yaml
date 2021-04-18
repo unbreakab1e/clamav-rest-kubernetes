@@ -1,0 +1,117 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clamav
+  labels:
+    app: clamav
+spec:
+  serviceName: clamav-api
+  replicas: 2
+  selector:
+    matchLabels:
+      app: clamav
+  template:
+    metadata:
+      labels:
+        app: clamav
+    spec:
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: clamav-configmap
+        name: clamav-configmap
+
+      initContainers:
+      - name: initialize-clamav
+        image: clamav
+        command: ["freshclam"]
+        volumeMounts:
+        - name: var-lib-clamav
+          mountPath: "/var/lib/clamav"
+        - mountPath: /etc/clamav/
+          name: clamav-configmap
+      securityContext:
+        runAsUser: 101
+        runAsGroup: 102
+        fsGroup: 102
+
+      containers:
+      - name: clamav
+        image: clamav
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "4"
+          limits:
+            memory: "4Gi"
+            cpu: "4"
+        livenessProbe:
+          exec:
+            command:
+            - /probe-clamd.sh
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+        readinessProbe:
+          exec:
+            command:
+            - /probe-clamd.sh
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 3
+        ports:
+        - name: clamav-api
+          protocol: TCP
+          containerPort: 3310
+        volumeMounts:
+        - name: var-lib-clamav
+          mountPath: "/var/lib/clamav"
+        - mountPath: /etc/clamav/
+          name: clamav-configmap
+
+      - name: freshclam-sidecar
+        image: clamav
+        command: ["freshclam"]
+        args: ["-d"]
+        volumeMounts:
+        - name: var-lib-clamav
+          mountPath: "/var/lib/clamav"
+        - mountPath: /etc/clamav/
+          name: clamav-configmap
+        livenessProbe:
+          exec:
+            command:
+            - /probe-freshclam.sh
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 3
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "100m"
+          limits:
+            memory: "1024Mi"
+            cpu: "200m"
+
+  volumeClaimTemplates:
+  - metadata:
+      name: var-lib-clamav
+    spec:
+      accessModes: 
+        - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: 2G
+      storageClassName: clamav-sc
+
+---
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: clamav-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: clamav

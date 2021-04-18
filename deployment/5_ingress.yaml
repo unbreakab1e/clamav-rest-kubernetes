@@ -1,0 +1,16 @@
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: clamav-rest-ingress
+  labels:
+    app: clamav-rest
+spec:
+  rules:
+  - host: clamav.example.com
+    http:
+      paths:
+      - backend:
+          serviceName: clamav-rest
+          servicePort: 8080
+        path: /

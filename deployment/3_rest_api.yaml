@@ -1,0 +1,48 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clamav-rest
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: clamav-rest
+  template:
+    metadata:
+      labels:
+        app: clamav-rest
+    spec:
+      containers:
+      - name: clamav-rest
+        image: clamav
+        command: ["/go-clamav-rest"]
+        args: ["-host", "clamav-api", "-maxFileMem=32"]
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "1"
+        ports:
+        - containerPort: 8080
+          name: clamav-rest
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: clamav-rest
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: clamav-rest
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+      securityContext:
+        runAsUser: 101
+        runAsGroup: 102
+        fsGroup: 102
